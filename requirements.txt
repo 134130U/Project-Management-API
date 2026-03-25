@@ -1,0 +1,11 @@
+fastapi>=0.100.0
+uvicorn>=0.23.0
+sqlalchemy>=2.0.15
+psycopg2-binary>=2.9.11
+pydantic[email,dotenv]>=1.10.19,<2.0.0
+minio>=7.1.15
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+python-multipart>=0.0.6
+email-validator>=2.0.0
+python-dotenv>=1.0.0
