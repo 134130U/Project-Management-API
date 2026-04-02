@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.project import Project
 from app.models.file import File as FileModel
 from app.schemas.project import ProjectResponse, ProjectUpdate
+from app.models.update import Update
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.core.exceptions import NotFoundException
@@ -111,3 +112,32 @@ def get_project(
     if not project:
         raise NotFoundException(resource="Project")
     return project
+
+@router.delete("/{project_id}")
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == current_user.id
+    ).first()
+    if not project:
+        raise NotFoundException(resource="Project")
+
+    # Delete all associated files from storage
+    files = db.query(FileModel).filter(FileModel.project_id == project_id).all()
+    for f in files:
+        try:
+            storage.delete(f.storage_key)
+        except Exception as e:
+            print(f"Error deleting file {f.storage_key}: {e}")
+
+    # Delete project (cascading might handle DB, but let's be explicit if needed)
+    # Actually, SQLAlchemy relationship with cascade="all, delete-orphan" would be better.
+    # Let's check the models for cascade.
+    
+    db.delete(project)
+    db.commit()
+    return {"message": "Project deleted successfully"}

@@ -21,4 +21,5 @@ class Project(Base):
     owner_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    files = relationship("File", back_populates="project")
+    files = relationship("File", back_populates="project", cascade="all, delete-orphan")
+    updates = relationship("Update", back_populates="project", cascade="all, delete-orphan")

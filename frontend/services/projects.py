@@ -72,3 +72,15 @@ class ProjectService:
         headers = {"Authorization": f"Bearer {token}"}
         response = requests.get(get_api_url(f"/files/download/{file_id}"), headers=headers)
         return response
+
+    @staticmethod
+    def delete_project(token, project_id):
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.delete(get_api_url(f"/projects/{project_id}"), headers=headers)
+        return response
+
+    @staticmethod
+    def delete_file(token, file_id):
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.delete(get_api_url(f"/files/{file_id}"), headers=headers)
+        return response

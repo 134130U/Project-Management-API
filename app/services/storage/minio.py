@@ -37,3 +37,6 @@ class MinioStorage:
 
     def get_url(self, key):
         return self.client.presigned_get_object(settings.MINIO_BUCKET, key)
+
+    def delete(self, key):
+        self.client.remove_object(settings.MINIO_BUCKET, key)

@@ -193,6 +193,8 @@ def project_card(project):
                     html.Span(style={"height": "4px", "display": "block"}),
                     badge(priority, PRIORITY_COLORS.get(priority, COLORS["muted"])),
                 ], style={"flexShrink": "0", "textAlign": "right"}),
+                dbc.Button("🗑️", id={"type": "delete-project-card-btn", "index": project["id"]}, 
+                           size="sm", color="link", style={"padding": "0 8px", "alignSelf": "flex-start"})
             ], style={"display": "flex", "marginBottom": "10px"}),
 
             # Attachments
@@ -298,14 +300,19 @@ def project_detail_modal(project):
 
     # Attachments
     files = project.get("files", [])
-    file_list = [html.A([
-        html.Span("📎", style={"marginRight": "8px"}),
-        html.Span(f["filename"]),
-    ], id={"type": "download-link", "index": f["id"]},
-       href="#",
-       style={"display": "flex", "alignItems": "center", "color": COLORS["accent"],
+    file_list = [html.Div([
+        html.A([
+            html.Span("📎", style={"marginRight": "8px"}),
+            html.Span(f["filename"]),
+        ], id={"type": "download-link", "index": f["id"]},
+           href="#",
+           style={"display": "flex", "alignItems": "center", "color": COLORS["accent"],
+                  "textDecoration": "none", "fontSize": "14px"}),
+        dbc.Button("🗑️", id={"type": "delete-file-btn", "index": f["id"]}, 
+                   size="sm", color="link", style={"padding": "0 8px"})
+    ], style={"display": "flex", "alignItems": "center", "justifyContent": "space-between",
               "padding": "8px", "border": "1px solid #E8EAEF", "borderRadius": "8px",
-              "marginBottom": "8px", "textDecoration": "none", "fontSize": "14px"}) for f in files]
+              "marginBottom": "8px"}) for f in files]
 
     return dbc.Modal([
         dbc.ModalHeader([
@@ -346,6 +353,7 @@ def project_detail_modal(project):
                         ]),
 
                         dbc.Button("Update Project", id="update-project-btn", color="primary", size="sm", className="mb-4"),
+                        dbc.Button("Delete Project", id="delete-project-btn", color="danger", size="sm", className="mb-4 ms-2"),
 
                         html.Div([
                             html.H6("💰 Budget & Timeline", style={"fontWeight": "700", "marginBottom": "12px"}),
@@ -863,6 +871,9 @@ def update_new_filename(filename):
     Output("update-error", "children"),
     Input("update-project-btn", "n_clicks"),
     Input("post-update-btn", "n_clicks"),
+    Input("delete-project-btn", "n_clicks"),
+    Input({"type": "delete-project-card-btn", "index": ALL}, "n_clicks"),
+    Input({"type": "delete-file-btn", "index": ALL}, "n_clicks"),
     State("detail-project-id", "children"),
     State("detail-status", "value"),
     State("detail-progress", "value"),
@@ -874,20 +885,36 @@ def update_new_filename(filename):
     State("projects-store", "data"),
     prevent_initial_call=True,
 )
-def update_project_and_post_updates(n_upd, n_post, pid, status, progress, u_title, u_desc, u_file, u_filename, session, projects):
-    if not pid or not session:
+def update_project_and_post_updates(n_upd, n_post, n_del, n_del_card, n_del_file, pid, status, progress, u_title, u_desc, u_file, u_filename, session, projects):
+    if not session:
         return no_update, ""
     
     token = session.get("access_token")
     triggered = ctx.triggered_id
     
-    if triggered == "update-project-btn":
+    # Handle direct project deletion (from card or modal)
+    if triggered == "delete-project-btn" or (isinstance(triggered, dict) and triggered.get("type") == "delete-project-card-btn"):
+        target_pid = pid if triggered == "delete-project-btn" else triggered["index"]
+        resp = ProjectService.delete_project(token, target_pid)
+        if resp.status_code != 200:
+            return no_update, f"⚠️ Failed to delete project: {resp.text}"
+    
+    # Handle file deletion
+    elif isinstance(triggered, dict) and triggered.get("type") == "delete-file-btn":
+        file_id = triggered["index"]
+        resp = ProjectService.delete_file(token, file_id)
+        if resp.status_code != 200:
+            return no_update, f"⚠️ Failed to delete file: {resp.text}"
+
+    elif triggered == "update-project-btn":
+        if not pid: return no_update, ""
         data = {"status": status, "progress": int(progress) if progress is not None else 0}
         resp = ProjectService.update_project(token, pid, data)
         if resp.status_code != 200:
             return no_update, f"⚠️ Failed to update project: {resp.text}"
     
-    if triggered == "post-update-btn":
+    elif triggered == "post-update-btn":
+        if not pid: return no_update, ""
         if not u_title:
             return no_update, "⚠️ Title is required."
         
@@ -912,6 +939,10 @@ def update_project_and_post_updates(n_upd, n_post, pid, status, progress, u_titl
             error_msg = "✅ Updated!"
         elif triggered == "post-update-btn":
             error_msg = "✅ Update Posted!"
+        elif triggered == "delete-project-btn" or (isinstance(triggered, dict) and triggered.get("type") == "delete-project-card-btn"):
+             error_msg = "✅ Project Deleted!"
+        elif isinstance(triggered, dict) and triggered.get("type") == "delete-file-btn":
+             error_msg = "✅ File Deleted!"
         return new_projects, error_msg
     
     return projects, ""

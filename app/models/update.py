@@ -12,3 +12,4 @@ class Update(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     files = relationship("File", back_populates="update")
+    project = relationship("Project", back_populates="updates")

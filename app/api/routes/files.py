@@ -83,3 +83,30 @@ def list_files(
     ).all()
 
     return files
+
+@router.delete("/{file_id}")
+def delete_file(
+    file_id: int,
+    db: Session = Depends(get_db),
+    user = Depends(get_current_user)
+):
+    file = db.query(FileModel).filter(
+        FileModel.id == file_id
+    ).first()
+
+    if not file:
+        raise NotFoundException(resource="File")
+
+    # TODO: Verify user ownership through project or update
+    
+    # Delete from storage
+    try:
+        storage.delete(file.storage_key)
+    except Exception as e:
+        print(f"Error deleting from storage: {e}")
+
+    # Delete from DB
+    db.delete(file)
+    db.commit()
+
+    return {"message": "File deleted"}

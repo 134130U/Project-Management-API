@@ -240,7 +240,10 @@ def update_projects_table(n_clicks, projects_data, session_data, name, status, d
                 html.Td(f"${spent_val:,}"),
                 html.Td(dbc.Progress(value=progress_val, label=f"{progress_val}%")),
                 html.Td(files_info),
-                html.Td(dbc.Button("View", id={"type": "view-btn", "index": p["id"]}, size="sm", color="info"))
+                html.Td([
+                    dbc.Button("View", id={"type": "view-btn", "index": p["id"]}, size="sm", color="info", className="me-1"),
+                    dbc.Button("Delete", id={"type": "delete-project-btn-table", "index": p["id"]}, size="sm", color="danger")
+                ])
             ]))
 
         table_body = [html.Tbody(rows)]
@@ -300,6 +303,9 @@ def show_modal(pid, session):
     Output("update-error", "children"),
     Input("update-project-btn", "n_clicks"),
     Input("post-update-btn", "n_clicks"),
+    Input("delete-project-btn", "n_clicks"),
+    Input({"type": "delete-project-btn-table", "index": ALL}, "n_clicks"),
+    Input({"type": "delete-file-btn", "index": ALL}, "n_clicks"),
     State("detail-project-id", "children"),
     State("detail-status", "value"),
     State("detail-progress", "value"),
@@ -311,20 +317,36 @@ def show_modal(pid, session):
     State("projects-store", "data"),
     prevent_initial_call=True,
 )
-def update_project_and_post_updates_projects(n_upd, n_post, pid, status, progress, u_title, u_desc, u_file, u_filename, session, projects):
-    if not pid or not session:
+def update_project_and_post_updates_projects(n_upd, n_post, n_del, n_del_table, n_del_file, pid, status, progress, u_title, u_desc, u_file, u_filename, session, projects):
+    if not session:
         return no_update, ""
     
     token = session.get("access_token")
     triggered = ctx.triggered_id
     
-    if triggered == "update-project-btn":
+    # Handle direct project deletion (from table or modal)
+    if triggered == "delete-project-btn" or (isinstance(triggered, dict) and triggered.get("type") == "delete-project-btn-table"):
+        target_pid = pid if triggered == "delete-project-btn" else triggered["index"]
+        resp = ProjectService.delete_project(token, target_pid)
+        if resp.status_code != 200:
+            return no_update, f"⚠️ Failed to delete project: {resp.text}"
+    
+    # Handle file deletion
+    elif isinstance(triggered, dict) and triggered.get("type") == "delete-file-btn":
+        file_id = triggered["index"]
+        resp = ProjectService.delete_file(token, file_id)
+        if resp.status_code != 200:
+            return no_update, f"⚠️ Failed to delete file: {resp.text}"
+
+    elif triggered == "update-project-btn":
+        if not pid: return no_update, ""
         data = {"status": status, "progress": int(progress) if progress is not None else 0}
         resp = ProjectService.update_project(token, pid, data)
         if resp.status_code != 200:
             return no_update, f"⚠️ Failed to update project: {resp.text}"
     
-    if triggered == "post-update-btn":
+    elif triggered == "post-update-btn":
+        if not pid: return no_update, ""
         if not u_title:
             return no_update, "⚠️ Title is required."
         
@@ -349,6 +371,10 @@ def update_project_and_post_updates_projects(n_upd, n_post, pid, status, progres
             error_msg = "✅ Updated!"
         elif triggered == "post-update-btn":
             error_msg = "✅ Update Posted!"
+        elif triggered == "delete-project-btn" or (isinstance(triggered, dict) and triggered.get("type") == "delete-project-btn-table"):
+             error_msg = "✅ Project Deleted!"
+        elif isinstance(triggered, dict) and triggered.get("type") == "delete-file-btn":
+             error_msg = "✅ File Deleted!"
         return new_projects, error_msg
     
     return projects, ""
