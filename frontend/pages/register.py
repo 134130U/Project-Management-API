@@ -52,8 +52,12 @@ def register_user(n_clicks, email, password, confirm_password):
     response = AuthService.register(email, password)
     
     if response.status_code == 200:
-        token = response.json().get("access_token")
-        return dbc.Alert("Registration successful!", color="success"), {"token": token}
+        data = response.json()
+        token = data.get("access_token")
+        return dbc.Alert("Registration successful!", color="success"), {
+            "access_token": token,
+            "user_email": email
+        }
     else:
         try:
             error_msg = response.json().get("detail", "Registration failed")

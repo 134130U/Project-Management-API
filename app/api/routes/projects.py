@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File as FastAPIFile, Form
 from sqlalchemy.orm import Session, joinedload
 from app.models.project import Project
 from app.models.file import File as FileModel
-from app.schemas.project import ProjectResponse
+from app.schemas.project import ProjectResponse, ProjectUpdate
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.core.exceptions import NotFoundException
@@ -26,6 +26,7 @@ def create_project(
     team: Optional[str] = Form(None),
     stakeholders: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
+    progress: Optional[int] = Form(0),
     file: Optional[UploadFile] = FastAPIFile(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -42,6 +43,7 @@ def create_project(
         team=team,
         stakeholders=stakeholders,
         tags=tags,
+        progress=progress,
         owner_id=current_user.id
     )
     db.add(project)
@@ -65,6 +67,28 @@ def create_project(
         db.commit()
         db.refresh(project)
 
+    return project
+
+@router.patch("/{project_id}", response_model=ProjectResponse)
+def update_project(
+    project_id: int,
+    project_update: ProjectUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == current_user.id
+    ).first()
+    if not project:
+        raise NotFoundException(resource="Project")
+
+    update_data = project_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(project, key, value)
+
+    db.commit()
+    db.refresh(project)
     return project
 
 @router.get("", response_model=list[ProjectResponse])

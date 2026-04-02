@@ -1,13 +1,14 @@
 import dash
-from dash import dcc, html, dash_table, Input, Output, State, ctx, MATCH, ALL, callback
+from dash import dcc, html, dash_table, Input, Output, State, ctx, MATCH, ALL, callback, no_update
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, date
-import json
+from frontend.services.projects import ProjectService
+import base64
 import copy
 
-dash.register_page(__name__, path='/')
+dash.register_page(__name__, path='/dashboard')
 
 # ─────────────────────────────────────────
 # THEME
@@ -159,11 +160,13 @@ def project_card(project):
     
     # Files integration
     files = project.get("files", [])
-    file_badges = [html.Div([
+    file_badges = [html.A([
         html.Span("📎", style={"marginRight": "4px"}),
         html.Span(f["filename"], style={"fontSize": "11px"})
-    ], style={"display": "flex", "alignItems": "center", "color": "#6B7394",
-              "marginTop": "4px"}) for f in files]
+    ], id={"type": "download-link", "index": f["id"]},
+       href="#",
+       style={"display": "flex", "alignItems": "center", "color": COLORS["accent"],
+              "marginTop": "4px", "textDecoration": "none"}) for f in files]
 
     return dbc.Col(
         html.Div([
@@ -280,36 +283,29 @@ def project_card(project):
 
 
 def project_detail_modal(project):
+    pid = project.get("id")
     end_date = project.get("end_date")
     dl = days_left(end_date)
-    # dl_color = COLORS["danger"] if dl < 0 else COLORS["warning"] if dl < 14 else COLORS["success"]
     dl_text = f"{abs(dl)}d overdue" if dl < 0 else f"{dl}d remaining" if end_date else "No due date"
     
     budget = project.get("budget", 0)
     spent = project.get("spent", 0)
     bpct = budget_pct(project)
-    # b_color = COLORS["danger"] if bpct > 90 else COLORS["warning"] if bpct > 70 else COLORS["success"]
     
-    deliverables = project.get("deliverables", [])
-    done_count = sum(1 for d in deliverables if d.get("done"))
+    status = project.get("status", "Planning")
+    priority = project.get("priority", "Medium")
+    progress = project.get("progress", 0)
 
-    deliverable_items = []
-    for d in deliverables:
-        deliverable_items.append(
-            html.Div([
-                dbc.Checkbox(
-                    id={"type": "deliverable-check", "index": d.get("id", 0)},
-                    value=d.get("done", False),
-                    label=d.get("title", "Untitled"),
-                    # style={"color": COLORS["muted"] if d.get("done") else COLORS["text"]},
-                ),
-            ], style={
-                "padding": "8px 0",
-                # "borderBottom": f"1px solid {COLORS['border']}",
-                # "color": COLORS["muted"] if d.get("done") else COLORS["text"],
-                "textDecoration": "line-through" if d.get("done") else "none",
-            })
-        )
+    # Attachments
+    files = project.get("files", [])
+    file_list = [html.A([
+        html.Span("📎", style={"marginRight": "8px"}),
+        html.Span(f["filename"]),
+    ], id={"type": "download-link", "index": f["id"]},
+       href="#",
+       style={"display": "flex", "alignItems": "center", "color": COLORS["accent"],
+              "padding": "8px", "border": "1px solid #E8EAEF", "borderRadius": "8px",
+              "marginBottom": "8px", "textDecoration": "none", "fontSize": "14px"}) for f in files]
 
     return dbc.Modal([
         dbc.ModalHeader([
@@ -319,165 +315,91 @@ def project_detail_modal(project):
                     "fontWeight": "800", "margin": "0 0 8px 0"
                 }),
                 html.Div([
-                    badge(project.get("status", "Planning"), #STATUS_COLORS.get(project.get("status", "Planning"), COLORS["muted"])
-                          ),
+                    badge(status, STATUS_COLORS.get(status, COLORS["muted"])),
                     html.Span(" ", style={"marginRight": "6px"}),
-                    badge(project.get("priority", "Medium"), #PRIORITY_COLORS.get(project.get("priority", "Medium"), COLORS["muted"])
-                          ),
+                    badge(priority, PRIORITY_COLORS.get(priority, COLORS["muted"])),
                 ]),
             ])
-        ]),
+        ], close_button=True),
 
         dbc.ModalBody([
-            html.P(project.get("description", ""), style={
-                "color": "#6B7394",
-                "fontSize": "14px",
-                "lineHeight": "1.6", "marginBottom": "20px",
-            }),
-
-            # Date / deadline row
-            dbc.Row([
-                dbc.Col(html.Div([
-                    html.Div("Start Date", style={"color": "#6B7394",
-                                                  "fontSize": "12px",
-                                                   "marginBottom": "4px"}),
-                    html.Div(project.get("start_date", "N/A"), style={"fontWeight": "700", "color": "#1C2030"
-                                                                      }),
-                ], style={"background": "#F8F9FA",
-                          "borderRadius": "10px",
-                          "padding": "12px 14px", "border": "1px solid #E8EAEF"
-                })),
-                dbc.Col(html.Div([
-                    html.Div("End Date", style={"color": "#6B7394",
-                                                "fontSize": "12px","marginBottom": "4px"}),
-                    html.Div(project.get("end_date", "N/A"), style={"fontWeight": "700", "color": "#1C2030"
-                                                                    }),
-                ], style={"background": "#F8F9FA",
-                          "borderRadius": "10px",
-                          "padding": "12px 14px", "border": "1px solid #E8EAEF"
-                })),
-                dbc.Col(html.Div([
-                    html.Div("Deadline", style={"color": "#6B7394",
-                                                "fontSize": "12px","marginBottom": "4px"}),
-                    html.Div(dl_text, style={"fontWeight": "700", "color": "#1C2030"
-                                             }),
-                ], style={"background": "#F8F9FA",
-                          "borderRadius": "10px",
-                          "padding": "12px 14px", "border": "1px solid #E8EAEF"
-                })),
-            ], style={"marginBottom": "16px"}),
-
-            # Budget
-            html.Div([
-                html.H6("💰 Budget", style={"color": "#1C2030",
-                                           "fontWeight": "700","marginBottom": "12px"}),
-                html.Div([
-                    html.Span("Budget Used", style={"color": "#6B7394",
-                                                    "fontSize": "12px"}),
-                    html.Span(f"{bpct}%", style={"color": "#1C2030",
-                                                 "fontSize": "12px",
-                                                  "fontWeight": "700"}),
-                ], style={"display": "flex", "justifyContent": "space-between",
-                          "marginBottom": "4px"}),
-                progress_bar(bpct),
-                html.Div([
-                    html.Span(f"Spent: ${spent:,}",
-                              style={"color": "#6B7394",
-                                     "fontSize": "11px"}),
-                    html.Span(f"Total: ${budget:,}",
-                              style={"color": "#6B7394",
-                                     "fontSize": "11px"}),
-                ], style={"display": "flex", "justifyContent": "space-between",
-                          "marginTop": "4px"}),
-            ], style={"background": "#F8F9FA",
-                      "borderRadius": "12px",
-                      "padding": "16px 18px", "border": "1px solid #E8EAEF",
-                      "marginBottom": "16px"}),
-
-            # Progress
-            html.Div([
-                html.H6("📈 Progress", style={"color": "#1C2030", "fontWeight": "700",
-                                               "marginBottom": "12px"}),
-                html.Div([
-                    html.Span("Overall completion",
-                              style={"color": "#6B7394",
-                                     "fontSize": "13px"}),
-                    html.Span(f"{project.get('progress', 0)}%",
-                              style={"color": "#1C2030",
-                                     "fontWeight": "700"}),
-                ], style={"display": "flex", "justifyContent": "space-between",
-                          "marginBottom": "6px"}),
-                progress_bar(project.get("progress", 0)),
-            ], style={"background": "#F8F9FA",
-                      "borderRadius": "12px",
-                      "padding": "16px 18px", "border": "1px solid #E8EAEF",
-                      "marginBottom": "16px"}),
-
-            # Deliverables
-            html.Div([
-                html.H6("📦 Deliverables", style={"color": "#1C2030",
-                                                 "fontWeight": "700","marginBottom": "12px"}),
-                *deliverable_items,
-                html.Div(f"{done_count} / {len(project['deliverables'])} completed",
-                         style={"color": "#6B7394",
-                                "fontSize": "12px","marginTop": "8px"}),
-            ], style={"background": "#F8F9FA",
-                      "borderRadius": "12px",
-                      "padding": "16px 18px", "border": "1px solid #E8EAEF",
-                      "marginBottom": "16px"}),
-
-            # Team
-            html.Div([
-                html.H6(f"👥 Team ({len(project['team'])})",
-                        style={"color": "#1C2030",
-                               "fontWeight": "700",
-                               "marginBottom": "12px"}),
-                html.Div([
+            dbc.Tabs([
+                dbc.Tab(label="Overview", tab_id="tab-overview", children=[
                     html.Div([
-                        avatar_initials(m, 26),
-                        html.Span(m, style={"color": "#1C2030",
-                                            "fontSize": "13px"}),
-                    ], style={
-                        "display": "flex", "alignItems": "center", "gap": "8px",
-                        "background": "#F8F9FA", "border": "1px solid #E8EAEF",
-                        "borderRadius": "20px", "padding": "4px 12px 4px 4px",
-                        "marginRight": "8px", "marginBottom": "8px",
-                        "display": "inline-flex",
-                    })
-                    for m in project["team"]
-                ], style={"display": "flex", "flexWrap": "wrap"}),
-            ], style={"background": "#F8F9FA",
-                      "borderRadius": "12px",
-                      "padding": "16px 18px", "border": "1px solid #E8EAEF",
-                      "marginBottom": "16px"}),
+                        html.P(project.get("description", ""), style={
+                            "color": "#6B7394", "fontSize": "14px", "lineHeight": "1.6", "marginTop": "20px"
+                        }),
+                        
+                        dbc.Row([
+                            dbc.Col(html.Div([
+                                html.Label("Status", style=form_label_style()),
+                                dbc.Select(
+                                    id="detail-status",
+                                    options=[{"label": s, "value": s} for s in STATUS_COLORS.keys()],
+                                    value=status
+                                ),
+                            ], className="mb-3"), md=6),
+                            dbc.Col(html.Div([
+                                html.Label("Progress (%)", style=form_label_style()),
+                                dbc.Input(id="detail-progress", type="number", min=0, max=100, value=progress),
+                            ], className="mb-3"), md=6),
+                        ]),
 
-            # Stakeholders
-            html.Div([
-                html.H6("🏢 Stakeholders", style={"color": "#1C2030",
-                                                 "fontWeight": "700",
-                                                   "marginBottom": "12px"}),
-                html.Div([
-                    html.Span(s, style={
-                        "background": "#F0F2F5", "color": "#4F8EF7",
-                        "border": "1px solid #4F8EF744",
-                        "borderRadius": "8px", "padding": "4px 12px",
-                        "fontSize": "13px", "marginRight": "8px", "marginBottom": "8px",
-                        "display": "inline-block",
-                    }) for s in project["stakeholders"]
+                        dbc.Button("Update Project", id="update-project-btn", color="primary", size="sm", className="mb-4"),
+
+                        html.Div([
+                            html.H6("💰 Budget & Timeline", style={"fontWeight": "700", "marginBottom": "12px"}),
+                            dbc.Row([
+                                dbc.Col(html.Div([
+                                    html.Div("Spent / Total", style={"fontSize": "12px", "color": "#6B7394"}),
+                                    html.Div(f"${spent:,} / ${budget:,}", style={"fontWeight": "700"}),
+                                ])),
+                                dbc.Col(html.Div([
+                                    html.Div("Deadline", style={"fontSize": "12px", "color": "#6B7394"}),
+                                    html.Div(dl_text, style={"fontWeight": "700"}),
+                                ])),
+                            ]),
+                            html.Div(progress_bar(bpct), style={"marginTop": "10px"}),
+                        ], style={"background": "#F8F9FA", "padding": "16px", "borderRadius": "12px", "marginBottom": "20px"}),
+                    ])
                 ]),
-            ], style={"background": "#F8F9FA",
-                      "borderRadius": "12px",
-                      "padding": "16px 18px", "border": "1px solid #E8EAEF"
-            }),
+                dbc.Tab(label="Updates & Comments", tab_id="tab-updates", children=[
+                    html.Div([
+                        html.Div(id="updates-history", style={"maxHeight": "300px", "overflowY": "auto", "marginTop": "15px"}),
+                        
+                        html.Hr(),
+                        html.H6("Add New Update", style={"fontWeight": "700"}),
+                        dbc.Input(id="update-title", placeholder="Title", className="mb-2"),
+                        dbc.Textarea(id="update-description", placeholder="What happened?", className="mb-2"),
+                        
+                        html.Label("Attach File", style=form_label_style()),
+                        dcc.Upload(
+                            id='update-upload',
+                            children=html.Div(['Drag and Drop or ', html.A('Select Files')]),
+                            style={'width': '100%', 'height': '40px', 'lineHeight': '40px', 'borderWidth': '1px',
+                                   'borderStyle': 'dashed', 'borderRadius': '5px', 'textAlign': 'center', 'fontSize': '12px'},
+                            multiple=False
+                        ),
+                        html.Div(id='update-upload-filename', style={"fontSize": "12px", "marginTop": "4px"}),
+                        
+                        dbc.Button("Post Update", id="post-update-btn", color="success", className="mt-3", size="sm"),
+                        html.Div(id="update-error", style={"color": "red", "fontSize": "12px", "marginTop": "8px"})
+                    ], style={"padding": "10px"})
+                ]),
+                dbc.Tab(label="Files", tab_id="tab-files", children=[
+                    html.Div([
+                        html.H6("Project Files", style={"fontWeight": "700", "marginTop": "15px", "marginBottom": "15px"}),
+                        html.Div(file_list if file_list else "No files attached.")
+                    ], style={"padding": "10px"})
+                ]),
+            ], id="detail-tabs", active_tab="tab-overview"),
         ]),
-
-        dbc.ModalFooter(
-            dbc.Button("Close", id="close-modal", color="secondary"),
-            # style={"background": COLORS["surface"],
-            #        "borderTop": f"1px solid {COLORS['border']}"}
-        ),
-    ], id="project-modal", is_open=True, size="lg",
-       style={"fontFamily": "'DM Sans', sans-serif"})
+        
+        # dcc.Download for file downloads
+        dcc.Download(id="download-component"),
+        # Hidden project id
+        html.Div(pid, id="detail-project-id", style={"display": "none"}),
+    ], id="project-modal", is_open=True, size="lg")
 
 
 def budget_chart(projects):
@@ -782,11 +704,10 @@ layout.children.insert(0, dcc.Store(id="active-filter", data="All"))
     prevent_initial_call="initial_duplicate"
 )
 def load_projects(session_data, n_clicks):
-    if not session_data or 'token' not in session_data:
+    if not session_data or 'access_token' not in session_data:
         return []
     
-    from frontend.services.projects import ProjectService
-    token = session_data['token']
+    token = session_data['access_token']
     response = ProjectService.get_projects(token)
     if response.status_code == 200:
         return response.json()
@@ -938,6 +859,140 @@ def update_new_filename(filename):
 
 
 @callback(
+    Output("projects-store", "data", allow_duplicate=True),
+    Output("update-error", "children"),
+    Input("update-project-btn", "n_clicks"),
+    Input("post-update-btn", "n_clicks"),
+    State("detail-project-id", "children"),
+    State("detail-status", "value"),
+    State("detail-progress", "value"),
+    State("update-title", "value"),
+    State("update-description", "value"),
+    State("update-upload", "contents"),
+    State("update-upload", "filename"),
+    State("session-store", "data"),
+    State("projects-store", "data"),
+    prevent_initial_call=True,
+)
+def update_project_and_post_updates(n_upd, n_post, pid, status, progress, u_title, u_desc, u_file, u_filename, session, projects):
+    if not pid or not session:
+        return no_update, ""
+    
+    token = session.get("access_token")
+    triggered = ctx.triggered_id
+    
+    if triggered == "update-project-btn":
+        data = {"status": status, "progress": int(progress) if progress is not None else 0}
+        resp = ProjectService.update_project(token, pid, data)
+        if resp.status_code != 200:
+            return no_update, f"⚠️ Failed to update project: {resp.text}"
+    
+    if triggered == "post-update-btn":
+        if not u_title:
+            return no_update, "⚠️ Title is required."
+        
+        # Create Update
+        upd_resp = ProjectService.create_update(token, pid, u_title, u_desc)
+        if upd_resp.status_code == 200:
+             if u_file:
+                # Upload File if present
+                upd_id = upd_resp.json().get("id")
+                content_type, content_string = u_file.split(',')
+                file_content = base64.b64decode(content_string)
+                ProjectService.upload_file(token, upd_id, file_content, u_filename, content_type)
+        else:
+            return no_update, f"⚠️ Failed to post update: {upd_resp.text}"
+            
+    # Refresh projects store
+    resp = ProjectService.get_projects(token)
+    if resp.status_code == 200:
+        new_projects = resp.json()
+        error_msg = ""
+        if triggered == "update-project-btn":
+            error_msg = "✅ Updated!"
+        elif triggered == "post-update-btn":
+            error_msg = "✅ Update Posted!"
+        return new_projects, error_msg
+    
+    return projects, ""
+
+@callback(
+    Output("updates-history", "children"),
+    Input("detail-project-id", "children"),
+    Input("projects-store", "data"),
+    State("session-store", "data"),
+)
+def load_updates(pid, projects, session):
+    if not pid or not session:
+        return "Select a project to see updates."
+    
+    token = session.get("access_token")
+    resp = ProjectService.get_updates(token, pid)
+    if resp.status_code == 200:
+        updates = resp.json()
+        if not updates:
+            return html.Div("No updates yet.", style={"color": "#6B7394", "fontSize": "14px"})
+            
+        items = []
+        for u in sorted(updates, key=lambda x: x['created_at'], reverse=True):
+            update_files = []
+            if u.get("files"):
+                for f in u["files"]:
+                    update_files.append(html.Div([
+                        html.A([
+                            html.I(className="fas fa-paperclip me-1"),
+                            f.get("filename")
+                        ], id={"type": "download-link", "index": f.get("id")}, 
+                           href="#", className="text-decoration-none small")
+                    ], className="mt-1"))
+
+            items.append(html.Div([
+                html.Div([
+                    html.Strong(u.get("title", "Update"), style={"fontSize": "14px"}),
+                    html.Small(u.get("created_at")[:16].replace("T", " "), 
+                               style={"float": "right", "color": "#6B7394"})
+                ]),
+                html.P(u.get("description", ""), style={"fontSize": "13px", "margin": "5px 0"}),
+                html.Div(update_files),
+                html.Hr(style={"margin": "10px 0"})
+            ]))
+        return items
+    return "Error loading updates."
+
+@callback(
+    Output("update-upload-filename", "children"),
+    Input("update-upload", "filename")
+)
+def show_update_filename(filename):
+    if filename:
+        return f"Selected: {filename}"
+    return ""
+
+@callback(
+    Output("download-component", "data"),
+    Input({"type": "download-link", "index": ALL}, "n_clicks"),
+    State({"type": "download-link", "index": ALL}, "id"),
+    State("session-store", "data"),
+    prevent_initial_call=True,
+)
+def download_file(n_clicks, ids, session):
+    if not any(n_clicks) or not session:
+        return no_update
+    
+    token = session.get("access_token")
+    triggered_id = ctx.triggered_id
+    file_id = triggered_id["index"]
+    
+    resp = ProjectService.get_file_download_url(token, file_id)
+    if resp.status_code == 200:
+        url = resp.json().get("url")
+        # In a real app, we'd redirect or use window.open via clientside callback.
+        # For this demo, let's just use dcc.send_string as a placeholder if it's not local.
+        return dcc.send_string(f"Download URL: {url}", f"file_{file_id}_link.txt")
+    return no_update
+
+@callback(
+    Output("projects-store", "data", allow_duplicate=True),
     Output("new-project-error", "children"),
     Output("new-project-modal", "is_open", allow_duplicate=True),
     Input("create-project-btn", "n_clicks"),
@@ -961,17 +1016,14 @@ def create_project(n, session_data, name, description, status, priority,
                    start_date, end_date, budget, spent,
                    team, stakeholders, tags, file_contents, filename):
     if not n:
-        return "", False
+        return no_update, "", False
 
     if not name or not start_date or not end_date or not budget:
-        return "⚠️ Please fill in Name, Dates, and Budget.", True
+        return no_update, "⚠️ Please fill in Name, Dates, and Budget.", True
 
-    token = session_data.get("token") if session_data else None
+    token = session_data.get("access_token") if session_data else None
     if not token:
-        return "⚠️ Please log in to create a project.", True
-
-    import base64
-    from frontend.services.projects import ProjectService
+        return no_update, "⚠️ Please log in to create a project.", True
 
     file_content = None
     content_type = None
@@ -979,20 +1031,19 @@ def create_project(n, session_data, name, description, status, priority,
         content_type, content_string = file_contents.split(',')
         file_content = base64.b64decode(content_string)
 
-    # Project successfully sent to backend with all fields.
-    
     response = ProjectService.create_project(
-        token, name, status, description, 
+        token, name, status, description,
         priority=priority, start_date=start_date, end_date=end_date,
         budget=budget, spent=spent, team=team, stakeholders=stakeholders, tags=tags,
         file_content=file_content, filename=filename, content_type=content_type
     )
 
     if response.status_code == 200:
-        return "", False
+        refresh = ProjectService.get_projects(token)
+        return refresh.json(), "", False
     else:
         try:
             err = response.json().get("detail", "Failed to create project")
         except:
             err = "Failed to create project"
-        return f"❌ {err}", True
+        return no_update, f"❌ {err}", True

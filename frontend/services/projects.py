@@ -34,3 +34,41 @@ class ProjectService:
             response = requests.post(get_api_url("/projects"), headers=headers, data=data)
             
         return response
+
+    @staticmethod
+    def update_project(token, project_id, data):
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.patch(get_api_url(f"/projects/{project_id}"), headers=headers, json=data)
+        return response
+
+    @staticmethod
+    def get_updates(token, project_id):
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(get_api_url(f"/updates/{project_id}"), headers=headers)
+        return response
+
+    @staticmethod
+    def create_update(token, project_id, title, description):
+        headers = {"Authorization": f"Bearer {token}"}
+        data = {
+            "project_id": project_id,
+            "title": title,
+            "description": description
+        }
+        response = requests.post(get_api_url("/updates"), headers=headers, json=data)
+        return response
+
+    @staticmethod
+    def upload_file(token, update_id, file_content, filename, content_type):
+        headers = {"Authorization": f"Bearer {token}"}
+        files = {
+            "file": (filename, file_content, content_type)
+        }
+        response = requests.post(get_api_url(f"/files/upload/{update_id}"), headers=headers, files=files)
+        return response
+
+    @staticmethod
+    def get_file_download_url(token, file_id):
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(get_api_url(f"/files/download/{file_id}"), headers=headers)
+        return response

@@ -17,6 +17,7 @@ class Project(Base):
     team = Column(Text)
     stakeholders = Column(Text)
     tags = Column(Text)
+    progress = Column(Integer, default=0)
     owner_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
 

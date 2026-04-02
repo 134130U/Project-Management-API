@@ -40,4 +40,4 @@ def list_updates(
     if not project:
         raise NotFoundException(resource="Project")
         
-    return db.query(Update).filter(Update.project_id == project_id).all()
+    return db.query(Update).filter(Update.project_id == project_id).order_by(Update.created_at.desc()).all()

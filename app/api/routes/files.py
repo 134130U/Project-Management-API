@@ -30,6 +30,7 @@ def upload_file(
     key = storage.upload(file.file)
 
     db_file = FileModel(
+        project_id=update.project_id,
         update_id=update_id,
         storage_key=key,
         filename=file.filename,

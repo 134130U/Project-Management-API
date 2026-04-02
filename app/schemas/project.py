@@ -16,6 +16,7 @@ class ProjectBase(BaseModel):
     team: Optional[str] = None
     stakeholders: Optional[str] = None
     tags: Optional[str] = None
+    progress: Optional[int] = 0
 
 class ProjectCreate(ProjectBase):
     pass
@@ -32,6 +33,7 @@ class ProjectUpdate(BaseModel):
     team: Optional[str] = None
     stakeholders: Optional[str] = None
     tags: Optional[str] = None
+    progress: Optional[int] = None
 
 class ProjectResponse(ProjectBase):
     id: int

@@ -5,6 +5,5 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . frontend/
-
 ENV PYTHONPATH=/app
 CMD ["gunicorn", "-b", "0.0.0.0:8050", "frontend.app:server"]
