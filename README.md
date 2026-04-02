@@ -1,22 +1,27 @@
-# Project Management API
+# Project Management API & Frontend
 
-A FastAPI-based REST API for project management, featuring user authentication, project tracking, updates, and file storage.
+A full-stack project management application featuring a FastAPI-based REST API and a Dash-based interactive frontend. Track project progress, manage tasks, and handle file attachments in a Jira/Asana style interface.
 
 ## Features
 
+- **Interactive Dashboard**: View project summaries, filter by status/priority, and see real-time progress.
+- **Project Detail View (Jira-style)**:
+    - **Update Progress**: Live updates for project completion percentage and status.
+    - **Comments & Updates**: Post updates with rich text and file attachments.
+    - **File Management**: Upload and download project-related files directly from the UI.
 - **Authentication**: Secure JWT-based authentication for user login and registration.
-- **Project Management**: Create, read, update, and delete projects.
-- **Updates**: Track project progress with periodic updates.
-- **File Storage**: Upload and manage project-related files using MinIO.
-- **Database**: PostgreSQL for persistent data storage.
-- **Containerization**: Fully Dockerized for easy setup and deployment.
+- **Project Management**: Create, read, update, and delete projects with ease.
+- **File Storage**: Persistent storage for attachments using MinIO.
+- **Database**: PostgreSQL for robust data management.
+- **Containerization**: Fully Dockerized for seamless setup and deployment.
 
 ## Technologies Used
 
-- **Framework**: [FastAPI](https://fastapi.tiangolo.com/)
+- **Frontend**: [Dash](https://dash.plotly.com/) (Plotly), [Dash Bootstrap Components](https://dash-bootstrap-components.opensource.faculty.ai/)
+- **Backend Framework**: [FastAPI](https://fastapi.tiangolo.com/)
 - **Database**: [PostgreSQL](https://www.postgresql.org/)
 - **ORM**: [SQLAlchemy](https://www.sqlalchemy.org/)
-- **Storage**: [MinIO](https://min.io/)
+- **Storage**: [MinIO](https://min.io/) (S3 Compatible)
 - **Orchestration**: [Docker Compose](https://docs.docker.com/compose/)
 - **Language**: Python 3.9+
 
@@ -43,12 +48,18 @@ Use the provided `Makefile` to build and start all services:
 make run
 ```
 This will start:
-- **API**: [http://localhost:8000](http://localhost:8000)
+- **Frontend**: [http://localhost:8050](http://localhost:8050)
+- **API (Swagger UI)**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **PostgreSQL**: `localhost:5432`
 - **pgAdmin**: [http://localhost:5050](http://localhost:5050)
 - **MinIO Console**: [http://localhost:9001](http://localhost:9001)
 
-### 4. Stop the Application
+### 4. Default Login Credentials
+Use the following credentials to explore the application:
+- **Email**: `test@test.com`
+- **Password**: `newpassword123`
+
+### 5. Stop the Application
 ```bash
 make down
 ```
@@ -76,7 +87,7 @@ make test
 ## Project Structure
 
 ```text
-├── app/
+├── app/                # Backend FastAPI application
 │   ├── api/            # API routes and dependencies
 │   ├── core/           # Security, auth, and shared core logic
 │   ├── db/             # Database session and base models
@@ -85,9 +96,14 @@ make test
 │   ├── schemas/        # Pydantic models (data validation)
 │   ├── services/       # Business logic layer
 │   └── main.py         # Application entry point
+├── frontend/           # Frontend Dash application
+│   ├── pages/          # Dash pages (Dashboard, Projects, Login, etc.)
+│   ├── components/     # Reusable UI components (Navbar, Cards, etc.)
+│   ├── services/       # Frontend-to-Backend API client services
+│   └── app.py          # Dash application initialization
 ├── scripts/            # Database and storage initialization scripts
 ├── tests/              # Unit and integration tests
-├── Dockerfile          # Container specification
+├── Dockerfile          # Backend container specification
 ├── docker-compose.yml  # Multi-container orchestration
 ├── Makefile            # Automation commands
 └── requirements.txt    # Project dependencies
