@@ -10,5 +10,6 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str
     class Config:
         env_file = ".env"
+        case_sensitive = True
 
 settings = Settings()

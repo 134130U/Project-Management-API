@@ -11,18 +11,20 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/register", response_model=Token)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == user_in.email).first():
+    email = user_in.email.lower().strip()
+    if db.query(User).filter(User.email == email).first():
         raise BadRequestException(detail="Email already registered")
     
-    user = User(email=user_in.email, password=hash_password(user_in.password))
+    user = User(email=email, password=hash_password(user_in.password))
     db.add(user)
     db.commit()
-    token = create_token({"email": user_in.email})
+    token = create_token({"email": email})
     return {"access_token": token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
 def login(login_in: Login, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == login_in.email).first()
+    email = login_in.email.lower().strip()
+    user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(login_in.password, user.password):
         raise BadRequestException(detail="Incorrect email or password")
     

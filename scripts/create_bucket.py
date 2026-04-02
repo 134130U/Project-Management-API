@@ -4,6 +4,8 @@ from minio import Minio
 from minio.error import S3Error
 
 # Add project root to path to import settings
+from dotenv import load_dotenv
+load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.config import settings
 

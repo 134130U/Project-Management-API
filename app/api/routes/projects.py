@@ -1,26 +1,70 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, UploadFile, File as FastAPIFile, Form
+from sqlalchemy.orm import Session, joinedload
 from app.models.project import Project
-from app.schemas.project import ProjectCreate, ProjectResponse
+from app.models.file import File as FileModel
+from app.schemas.project import ProjectResponse
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.core.exceptions import NotFoundException
+from app.services.storage.factory import get_storage
+from typing import Optional
+from datetime import datetime, date
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+storage = get_storage()
 
 @router.post("", response_model=ProjectResponse)
 def create_project(
-    project_in: ProjectCreate,
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    status: Optional[str] = Form("active"),
+    priority: Optional[str] = Form("Medium"),
+    start_date: Optional[date] = Form(None),
+    end_date: Optional[date] = Form(None),
+    budget: Optional[int] = Form(0),
+    spent: Optional[int] = Form(0),
+    team: Optional[str] = Form(None),
+    stakeholders: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    file: Optional[UploadFile] = FastAPIFile(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     project = Project(
-        **project_in.dict(),
+        name=name,
+        description=description,
+        status=status,
+        priority=priority,
+        start_date=start_date,
+        end_date=end_date,
+        budget=budget,
+        spent=spent,
+        team=team,
+        stakeholders=stakeholders,
+        tags=tags,
         owner_id=current_user.id
     )
     db.add(project)
     db.commit()
     db.refresh(project)
+
+    # Re-fetch with files to be safe
+    project = db.query(Project).options(joinedload(Project.files)).filter(Project.id == project.id).first()
+
+    if file:
+        file_data = file.file.read()
+        key = storage.upload(file_data)
+        db_file = FileModel(
+            project_id=project.id,
+            storage_key=key,
+            filename=file.filename,
+            size=0,
+            mime_type=file.content_type
+        )
+        db.add(db_file)
+        db.commit()
+        db.refresh(project)
+
     return project
 
 @router.get("", response_model=list[ProjectResponse])
@@ -28,7 +72,7 @@ def list_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return db.query(Project).filter(Project.owner_id == current_user.id).all()
+    return db.query(Project).options(joinedload(Project.files)).filter(Project.owner_id == current_user.id).all()
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(
@@ -36,7 +80,7 @@ def get_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    project = db.query(Project).filter(
+    project = db.query(Project).options(joinedload(Project.files)).filter(
         Project.id == project_id,
         Project.owner_id == current_user.id
     ).first()

@@ -46,6 +46,14 @@ CREATE TABLE projects (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     status VARCHAR(50) DEFAULT 'active',
+    priority VARCHAR(50) DEFAULT 'Medium',
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
+    budget INTEGER DEFAULT 0,
+    spent INTEGER DEFAULT 0,
+    team TEXT,
+    stakeholders TEXT,
+    tags TEXT,
     owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -60,6 +68,7 @@ CREATE TABLE updates (
 
 CREATE TABLE files (
     id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
     update_id INTEGER REFERENCES updates(id) ON DELETE CASCADE,
     storage_key TEXT,
     filename TEXT,
@@ -74,6 +83,7 @@ CREATE TABLE files (
 
 CREATE INDEX idx_projects_owner ON projects(owner_id);
 CREATE INDEX idx_updates_project ON updates(project_id);
+CREATE INDEX idx_files_project ON files(project_id);
 CREATE INDEX idx_files_update ON files(update_id);
 CREATE INDEX idx_users_email ON users(email);
 

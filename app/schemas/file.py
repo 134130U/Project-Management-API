@@ -9,12 +9,14 @@ class FileBase(BaseModel):
     size: int
 
 class FileCreate(FileBase):
-    update_id: int
+    project_id: Optional[int] = None
+    update_id: Optional[int] = None
 
 class FileResponse(FileBase):
     id: int
-    update_id: int
+    project_id: Optional[int] = None
+    update_id: Optional[int] = None
     created_at: datetime
 
     class Config:
-        from_attributes = True
+        orm_mode = True
