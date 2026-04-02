@@ -27,14 +27,19 @@ def upload_file(
     if not update:
         raise NotFoundException(resource="Update")
 
-    key = storage.upload(file.file)
+    # Read file data to get its size
+    file_data = file.file.read()
+    size = len(file_data)
+    
+    # Upload from the byte data
+    key = storage.upload(file_data)
 
     db_file = FileModel(
         project_id=update.project_id,
         update_id=update_id,
         storage_key=key,
         filename=file.filename,
-        size=0,
+        size=size,
         mime_type=file.content_type
     )
 
